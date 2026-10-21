@@ -1,6 +1,19 @@
 name: astrbot_plugin_deepseek_balance
 display_name: DeepSeek余额查询
-desc: 查询 DeepSeek API Key 的账户余额，支持配置多个 Key 并分别展示
-version: 1.0.0
+desc: 查询 DeepSeek API Key 的账户余额，支持配置多个 Key 并分别展示总余额、赠送余额与充值余额
+short_desc: 一条命令查清你的 DeepSeek 余额
+version: 1.0.1
 author: 汐研
-repo: "https://github.com/YHX233/astrbot_plugin_deepseek_balance"
+repo: https://github.com/YHX233/astrbot_plugin_deepseek_balance
+branch: main
+astrbot_version: ">=4.20"
+tags:
+  - 工具
+  - DeepSeek
+  - 查询
+keywords:
+  - deepseek
+  - 余额
+  - balance
+  - apikey
+  - 查询

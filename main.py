@@ -24,7 +24,7 @@ COMMANDS = ("余额", "查余额", "ds余额", "deepseek余额")
     "deepseek_balance",
     "DeepSeek余额查询",
     "查询 DeepSeek API Key 的账户余额",
-    "1.0.0",
+    "1.0.1",
 )
 class DeepSeekBalance(Star):
     def __init__(self, context: Context, config: dict | None = None):
