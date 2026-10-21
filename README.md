@@ -32,7 +32,7 @@ DeepSeek 余额
 
 ### 方式二：WebUI 上传
 
-1. 到 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 下载 zip
+1. 下载 [astrbot_plugin_deepseek_balance_v1.0.1.zip](dist/astrbot_plugin_deepseek_balance_v1.0.1.zip)（也可在 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 页面获取）
 2. 打开 AstrBot WebUI，进入插件管理
 3. 点「安装插件」，上传这个 zip
 4. 装完自动加载，插件列表里会出现「DeepSeek余额查询」
