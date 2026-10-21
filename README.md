@@ -55,8 +55,8 @@ DeepSeek 余额
 
 ```yaml
 api_keys:
-  - 主号=sk-你的Key写在这里
-  - 测试号=sk-你的Key写在这里
+  - 主号=sk-你的Key1
+  - 测试号=sk-你的Key2
 ```
 
 ### 其他配置项
