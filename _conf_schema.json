@@ -1,0 +1,32 @@
+{
+    "api_keys": {
+        "description": "DeepSeek API Key 列表",
+        "type": "list",
+        "hint": "每条格式为「备注名=sk-xxxxxxxx」，也可以只填 sk-xxxxxxxx。支持配置多个。",
+        "default": []
+    },
+    "admin_only": {
+        "description": "仅管理员可用",
+        "type": "bool",
+        "hint": "开启后，只有 QQ 群管理员/群主，或在下方白名单中的用户才能查询余额。",
+        "default": true
+    },
+    "allowed_users": {
+        "description": "额外允许的用户 QQ 号",
+        "type": "list",
+        "hint": "即使不是群管理员，填在这里的 QQ 号也能查询余额。",
+        "default": []
+    },
+    "timeout": {
+        "description": "请求超时时间（秒）",
+        "type": "int",
+        "hint": "调用 DeepSeek 接口的超时时间，建议 10~30 秒。",
+        "default": 15
+    },
+    "show_masked_key": {
+        "description": "显示脱敏后的 Key",
+        "type": "bool",
+        "hint": "开启后会在结果里显示 sk-****abcd 这种脱敏 Key，方便区分是哪一个。",
+        "default": true
+    }
+}
