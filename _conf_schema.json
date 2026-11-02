@@ -28,5 +28,53 @@
         "type": "bool",
         "hint": "开启后会在结果里显示 sk-****abcd 这种脱敏 Key，方便区分是哪一个。",
         "default": true
+    },
+    "enable_auto_check": {
+        "description": "启用定期余额检查",
+        "type": "bool",
+        "hint": "开启后插件会按下面的间隔自动查询余额，低于阈值时主动通知。默认关闭，不开启时插件只在收到 /余额 命令时查询。",
+        "default": false
+    },
+    "check_interval_minutes": {
+        "description": "检查间隔（分钟）",
+        "type": "int",
+        "hint": "多久查一次余额。建议 30~360 分钟，太小会频繁请求接口。",
+        "default": 60
+    },
+    "low_balance_threshold": {
+        "description": "低余额阈值（元）",
+        "type": "float",
+        "hint": "任一 Key 的总余额小于等于此值时触发通知。填 0 表示只在余额为 0 时提醒。",
+        "default": 5.0
+    },
+    "notify_mode": {
+        "description": "低余额通知方式",
+        "type": "string",
+        "hint": "填 agent 会构造事件唤醒 AI，由 AI 组织语言回复（推荐）；填 message 则直接发送纯文本提醒。agent 方式失败时会自动降级为 message。",
+        "default": "agent"
+    },
+    "notify_session": {
+        "description": "通知目标会话",
+        "type": "string",
+        "hint": "留空则使用 /余额订阅 记录的会话。也可以手动填，格式为 平台ID:消息类型:会话ID，例如 aiocqhttp:GroupMessage:123456。",
+        "default": ""
+    },
+    "notify_cooldown_hours": {
+        "description": "通知冷却（小时）",
+        "type": "int",
+        "hint": "同一个 Key 在冷却时间内只提醒一次，避免刷屏。余额恢复到阈值以上后会重置，下次再低会重新提醒。",
+        "default": 6
+    },
+    "enable_auto_switch_provider": {
+        "description": "低余额时自动切换供应商",
+        "type": "bool",
+        "hint": "⚠️ 此功能会破坏缓存导致消费增加。开启后余额过低时会自动把聊天供应商切到下方指定的 ID，从而绕过被耗尽的那个 Key。默认关闭。",
+        "default": false
+    },
+    "fallback_provider_id": {
+        "description": "切换到的供应商 ID",
+        "type": "string",
+        "hint": "AstrBot 配置里的服务提供商 ID，可在 WebUI 的服务提供商页面查看。留空则不切换。",
+        "default": ""
     }
 }

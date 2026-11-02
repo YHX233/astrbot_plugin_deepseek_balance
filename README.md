@@ -32,7 +32,7 @@ DeepSeek 余额
 
 ### 方式二：WebUI 上传
 
-1. 下载 [astrbot_plugin_deepseek_balance_v1.0.1.zip](dist/astrbot_plugin_deepseek_balance_v1.0.1.zip)（也可在 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 页面获取）
+1. 下载 [astrbot_plugin_deepseek_balance_v1.1.0.zip](dist/astrbot_plugin_deepseek_balance_v1.1.0.zip)（也可在 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 页面获取）
 2. 打开 AstrBot WebUI，进入插件管理
 3. 点「安装插件」，上传这个 zip
 4. 装完自动加载，插件列表里会出现「DeepSeek余额查询」
@@ -68,6 +68,14 @@ api_keys:
 | `allowed_users` | list | 空 | 额外允许的 QQ 号白名单 |
 | `timeout` | int | `15` | 请求超时秒数 |
 | `show_masked_key` | bool | `true` | 结果里显示脱敏 Key |
+| `enable_auto_check` | bool | `false` | 开启定期余额检查 |
+| `check_interval_minutes` | int | `60` | 检查间隔（分钟） |
+| `low_balance_threshold` | float | `5.0` | 低余额阈值（元） |
+| `notify_mode` | string | `agent` | 通知方式：`agent` 或 `message` |
+| `notify_session` | string | 空 | 通知目标会话，留空则用 `/余额订阅` 记录的 |
+| `notify_cooldown_hours` | int | `6` | 同一个 Key 的提醒冷却时间 |
+| `enable_auto_switch_provider` | bool | `false` | 低余额时自动切换供应商 |
+| `fallback_provider_id` | string | 空 | 切换目标供应商 ID |
 
 `admin_only` 默认开启，避免插件被人当免费额度查询器用。想对所有人开放就把这个关掉。
 
@@ -77,11 +85,53 @@ api_keys:
 | --- | --- |
 | `/余额` | 查询所有已配置 Key 的余额 |
 | `/余额 备注名` | 只查指定的那一个 |
+| `/余额订阅` | 把当前会话设为低余额通知目标 |
+| `/余额订阅 关闭` | 取消订阅 |
+| `/余额检查` | 立即检查一次（忽略冷却） |
 | `/余额帮助` | 查看用法 |
 
 命令别名：`/查余额`、`/ds余额`、`/deepseek余额`，效果一样。
 
 查询需要联网，会先回一句「查询中，稍等…」，然后出结果。
+
+## 余额监控
+
+插件可以自己盯着余额，低到阈值时主动喊你，不用天天手动查。
+
+### 开启步骤
+
+1. 在 AstrBot 里给这个插件填好 `api_keys`
+2. 在要收提醒的群或私聊里发一次 `/余额订阅`，把当前会话记下来
+3. 插件配置里把 `enable_auto_check` 打开，按需调整 `check_interval_minutes` 和 `low_balance_threshold`
+
+之后每过一个间隔就会查一轮，任一 Key 的总余额小于等于阈值时触发提醒，内容形如：
+
+```
+⚠️ DeepSeek 余额不足
+当前api余额剩余 3.20 元（主号）
+提醒阈值：5.00 元
+```
+
+### 通知方式
+
+`notify_mode` 有两个取值：
+
+- `agent`（默认）：构造一个事件唤醒主 AI，由 AI 组织语言回复。好处是它知道上下文，能顺便帮你看看该不该充值。
+- `message`：直接发一段纯文本，不经过 AI，最省 token。
+
+`agent` 方式依赖 AstrBot 内部接口，万一某个版本变动导致失败，会自动降级成 `message`，不会静默丢消息。
+
+### 避免刷屏
+
+`notify_cooldown_hours` 控制同一个 Key 的提醒频率，默认 6 小时。余额回到阈值以上后冷却会重置，下次再低会重新提醒。
+
+### 低余额自动切换供应商
+
+`enable_auto_switch_provider` 打开后，余额过低时会自动把聊天供应商切到 `fallback_provider_id` 指定的那个，让 bot 继续跑在别的 Key 上。
+
+> ⚠️ **此功能会破坏缓存导致消费增加。** 切换供应商会让 prompt 缓存失效，同样的对话要多花一遍钱。除非余额真的见底，否则不建议开。
+
+`fallback_provider_id` 填 AstrBot「服务提供商」页面里那个 ID，留空则不切换。切换会同时作用于当前会话和全局，避免只对单个会话生效。
 
 ## 常见问题
 
