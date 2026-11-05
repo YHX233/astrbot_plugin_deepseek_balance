@@ -1,7 +1,7 @@
 # DeepSeek 余额查询
 
 [![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.20-blue)](https://github.com/AstrBotDevs/AstrBot)
-[![Version](https://img.shields.io/badge/version-1.2.1-green)](https://github.com/YHX233/astrbot_plugin_deepseek_balance)
+[![Version](https://img.shields.io/badge/version-1.2.2-green)](https://github.com/YHX233/astrbot_plugin_deepseek_balance)
 [![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
 
 给 AstrBot 用的 DeepSeek 余额插件。一条命令查清余额，也能自己盯着，低了主动喊你。
@@ -44,7 +44,7 @@ DeepSeek 余额账本
 
 ### 方式一：WebUI 上传（推荐）
 
-1. 下载 [astrbot_plugin_deepseek_balance_v1.2.1.zip](dist/astrbot_plugin_deepseek_balance_v1.2.1.zip)
+1. 下载 [astrbot_plugin_deepseek_balance_v1.2.2.zip](dist/astrbot_plugin_deepseek_balance_v1.2.2.zip)
 2. 打开 AstrBot WebUI，进入插件管理
 3. 点「安装插件」，上传这个 zip
 4. 装完自动加载，插件列表里出现「DeepSeek余额查询」
@@ -227,6 +227,10 @@ DeepSeek 只在你领过赠送额度时才返回 `granted_balance`，没有就�
 插件只读取余额信息，不会把 Key 发到除 DeepSeek 官方以外的任何地方。结果里的 Key 经过脱敏，只保留头尾几位。账本只存「时间 + 备注名 + 金额」，不存 Key。
 
 ## 更新日志
+
+### 1.2.2
+- 修复查询回报不生效：注入事件后补上 `persist_agent_history`，把这一轮写回会话历史，模型下一轮才能真正看到查询结果
+- 后台回报任务加上强引用，避免被 GC 提前回收
 
 ### 1.2.1
 - 新增余额账本：每次查询记录时间与余额，`/余额账本` 查看趋势，支持清空

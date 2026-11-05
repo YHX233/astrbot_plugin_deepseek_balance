@@ -38,7 +38,7 @@ KV_LEDGER = "ledger"
     "deepseek_balance",
     "DeepSeek余额查询",
     "查询 DeepSeek API Key 的账户余额，支持定期检查与低余额提醒",
-    "1.2.1",
+    "1.2.2",
 )
 class DeepSeekBalance(Star):
     def __init__(self, context: Context, config: dict | None = None):
@@ -90,6 +90,8 @@ class DeepSeekBalance(Star):
 
         self._watch_task: asyncio.Task | None = None
         self._alert_state: dict[str, float] = {}
+        # 后台回报任务的强引用，避免被 GC 提前回收
+        self._bg_tasks: set[asyncio.Task] = set()
 
         if not self.api_keys:
             logger.warning("[DS余额] 还没有配置任何 API Key，/余额 暂不可用")
@@ -463,12 +465,17 @@ class DeepSeekBalance(Star):
             logger.exception("[DS余额] 主动发送消息失败")
             return False
 
-    async def _notify_via_agent(self, text: str, session_str: str) -> bool:
+    async def _notify_via_agent(
+        self, text: str, session_str: str, history_note: str | None = None
+    ) -> bool:
         """构造一个事件丢给主 agent，让它自己组织语言回复。
 
         用的是 AstrBot 官方 cron 任务同一套入口（CronMessageEvent +
-        build_main_agent）。这些是内部 API，升级后可能变动，所以整段
-        兜底 try/except，失败由调用方降级为直接发文本。
+        build_main_agent），跑完再把这一轮写回会话历史，
+        否则模型下一轮对话里看不到任何痕迹。
+
+        这些是内部 API，升级后可能变动，所以整段兜底 try/except，
+        失败由调用方降级为直接发文本。
         """
         try:
             from astrbot.api.provider import ProviderRequest
@@ -500,6 +507,9 @@ class DeepSeekBalance(Star):
             )
 
             conv = await _get_session_conv(event=event, plugin_context=self.context)
+            if not conv:
+                logger.warning("[DS余额] 拿不到会话，无法注入事件")
+                return False
             req = ProviderRequest()
             req.conversation = conv
             with contextlib.suppress(Exception):
@@ -523,6 +533,23 @@ class DeepSeekBalance(Star):
             runner = result.agent_runner
             async for _ in runner.step_until_done(16):
                 pass
+
+            # 关键一步：把这一轮写回会话历史。
+            # 少了它，agent 只是"跑了一次"，下一轮对话里模型看不到任何痕迹。
+            try:
+                from astrbot.core.utils.history_saver import persist_agent_history
+
+                await persist_agent_history(
+                    self.context.conversation_manager,
+                    event=event,
+                    req=req,
+                    summary_note=history_note or text,
+                )
+                logger.info(f"[DS余额] 已写入会话历史：{history_note or text}")
+            except Exception:  # noqa: BLE001
+                logger.exception("[DS余额] 写入会话历史失败")
+                return False
+
             return True
         except Exception:  # noqa: BLE001
             logger.exception("[DS余额] agent 通知失败")
@@ -586,10 +613,12 @@ class DeepSeekBalance(Star):
         await self._record_ledger(pairs)
 
         if self.enable_query_report and pairs:
-            # 回报走后台，不挡查询结果的返回
-            asyncio.create_task(
+            # 回报走后台，不挡查询结果的返回；保存强引用避免被 GC
+            task = asyncio.create_task(
                 self._report_query_safe(pairs, event.unified_msg_origin)
             )
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
         yield event.plain_result("DeepSeek 余额\n\n" + "\n\n".join(blocks))
 
@@ -613,7 +642,8 @@ class DeepSeekBalance(Star):
         else:
             detail = "、".join(f"{total:.2f} 元（{name}）" for name, total in pairs)
         text = f"{now}查询了 DeepSeek 余额，剩余 {detail}"
-        if not await self._notify_via_agent(text, session_str):
+        note = f"{now}用户查询了 DeepSeek 余额，当前剩余 {detail}"
+        if not await self._notify_via_agent(text, session_str, history_note=note):
             logger.warning("[DS余额] 查询回报未能送达 agent")
 
     @filter.command("余额订阅")
