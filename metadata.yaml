@@ -2,7 +2,7 @@ name: astrbot_plugin_deepseek_balance
 display_name: DeepSeek余额查询
 desc: 查询 DeepSeek API Key 的账户余额，支持余额账本、定期检查、低余额提醒与自动切换供应商
 short_desc: 查余额、记账本、盯着余额低了喊你
-version: 1.2.0
+version: 1.2.1
 author: 汐研
 repo: https://github.com/YHX233/astrbot_plugin_deepseek_balance
 branch: main

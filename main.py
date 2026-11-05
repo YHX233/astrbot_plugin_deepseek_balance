@@ -38,7 +38,7 @@ KV_LEDGER = "ledger"
     "deepseek_balance",
     "DeepSeek余额查询",
     "查询 DeepSeek API Key 的账户余额，支持定期检查与低余额提醒",
-    "1.2.0",
+    "1.2.1",
 )
 class DeepSeekBalance(Star):
     def __init__(self, context: Context, config: dict | None = None):
