@@ -65,6 +65,30 @@
         "hint": "同一个 Key 在冷却时间内只提醒一次，避免刷屏。余额恢复到阈值以上后会重置，下次再低会重新提醒。",
         "default": 6
     },
+    "enable_ledger": {
+        "description": "记录余额账本",
+        "type": "bool",
+        "hint": "开启后每次查询（手动 /余额 和定期检查都算）都会把时间和余额记下来，用 /余额账本 查看变化趋势。默认开启。",
+        "default": true
+    },
+    "ledger_max_records": {
+        "description": "账本最多保留条数",
+        "type": "int",
+        "hint": "超过这个数量会丢掉最早的记录。每条记录很小，500 条大约占用几百 KB。",
+        "default": 500
+    },
+    "ledger_show_count": {
+        "description": "账本每个 Key 显示几条",
+        "type": "int",
+        "hint": "/余额账本 里每个 Key 显示最近多少条明细，默认 5 条。",
+        "default": 5
+    },
+    "enable_query_report": {
+        "description": "查询后回报给 AI",
+        "type": "bool",
+        "hint": "⚠️ 开启后每次 /余额 查询都会额外唤醒一次 AI 并让它回一句话（「xx点xx分查询了ds余额，剩余xxx」），会消耗 token。默认关闭，账本功能已经能记录同样信息。",
+        "default": false
+    },
     "enable_auto_switch_provider": {
         "description": "低余额时自动切换供应商",
         "type": "bool",

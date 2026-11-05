@@ -28,16 +28,17 @@ BALANCE_URL = "https://api.deepseek.com/user/balance"
 CURRENCY_SYMBOL = {"CNY": "¥", "USD": "$"}
 COMMANDS = ("余额", "查余额", "ds余额", "deepseek余额")
 
-# 订阅关系与提醒状态放 KV，重载/重启后不丢
+# 订阅关系、提醒状态、账本都放 KV，重载/重启后不丢
 KV_NOTIFY_SESSION = "notify_session"
 KV_ALERT_STATE = "alert_state"
+KV_LEDGER = "ledger"
 
 
 @register(
     "deepseek_balance",
     "DeepSeek余额查询",
     "查询 DeepSeek API Key 的账户余额，支持定期检查与低余额提醒",
-    "1.1.0",
+    "1.2.0",
 )
 class DeepSeekBalance(Star):
     def __init__(self, context: Context, config: dict | None = None):
@@ -74,6 +75,18 @@ class DeepSeekBalance(Star):
         self.fallback_provider_id = str(
             self.config.get("fallback_provider_id", "") or ""
         ).strip()
+
+        # ---- 查询账本（默认开） ----
+        self.enable_ledger = bool(self.config.get("enable_ledger", True))
+        self.ledger_max_records = max(
+            10, self._as_int(self.config.get("ledger_max_records"), 500)
+        )
+        self.ledger_show_count = max(
+            1, self._as_int(self.config.get("ledger_show_count"), 5)
+        )
+
+        # ---- 查询后回报 agent（默认关） ----
+        self.enable_query_report = bool(self.config.get("enable_query_report", False))
 
         self._watch_task: asyncio.Task | None = None
         self._alert_state: dict[str, float] = {}
@@ -264,6 +277,7 @@ class DeepSeekBalance(Star):
         now = time.time()
         alerts: list[str] = []
         state_changed = False
+        records: list[tuple[str, float]] = []
 
         for name, key in self.api_keys:
             try:
@@ -275,6 +289,7 @@ class DeepSeekBalance(Star):
             total = self._extract_total(data)
             if total is None:
                 continue
+            records.append((name, total))
 
             if total <= self.low_balance_threshold:
                 last = self._alert_state.get(name, 0.0)
@@ -296,6 +311,8 @@ class DeepSeekBalance(Star):
         if state_changed:
             with contextlib.suppress(Exception):
                 await self.put_kv_data(KV_ALERT_STATE, self._alert_state)
+
+        await self._record_ledger(records)
         return alerts
 
     async def _send_alert(self, alerts: list[str]) -> bool:
@@ -342,6 +359,73 @@ class DeepSeekBalance(Star):
         except Exception as e:  # noqa: BLE001
             logger.exception("[DS余额] 自动切换供应商失败")
             return f"自动切换供应商失败：{e}"
+
+    # ---------------- 账本 ----------------
+
+    async def _record_ledger(self, pairs: list[tuple[str, float]]) -> None:
+        """把一次查询的结果追加进账本。pairs 是 [(备注名, 总余额), ...]"""
+        if not self.enable_ledger or not pairs:
+            return
+        try:
+            ledger = await self.get_kv_data(KV_LEDGER, [])
+            if not isinstance(ledger, list):
+                ledger = []
+            now = int(time.time())
+            for name, total in pairs:
+                ledger.append({"t": now, "name": str(name), "total": round(float(total), 2)})
+            if len(ledger) > self.ledger_max_records:
+                ledger = ledger[-self.ledger_max_records:]
+            await self.put_kv_data(KV_LEDGER, ledger)
+        except Exception:  # noqa: BLE001
+            logger.exception("[DS余额] 写入账本失败")
+
+    async def _load_ledger(self) -> list[dict]:
+        try:
+            ledger = await self.get_kv_data(KV_LEDGER, [])
+            return ledger if isinstance(ledger, list) else []
+        except Exception:  # noqa: BLE001
+            logger.exception("[DS余额] 读取账本失败")
+            return []
+
+    def _format_ledger(self, ledger: list[dict]) -> str:
+        """把账本渲染成给用户看的文本。"""
+        if not ledger:
+            return "账本还是空的。查询一次余额就会开始记录。"
+
+        # 按 Key 分组，保留时间顺序
+        grouped: dict[str, list[dict]] = {}
+        for item in ledger:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "未知"))
+            grouped.setdefault(name, []).append(item)
+
+        blocks: list[str] = ["DeepSeek 余额账本"]
+        for name, items in grouped.items():
+            items = [i for i in items if "total" in i and "t" in i]
+            if not items:
+                continue
+            items.sort(key=lambda x: x["t"])
+            totals = [float(i["total"]) for i in items]
+            latest = totals[-1]
+            blocks.append(f"\n【{name}】")
+            blocks.append(
+                f"当前 {latest:.2f} 元 ｜ 记录 {len(items)} 次 ｜ "
+                f"最高 {max(totals):.2f} ｜ 最低 {min(totals):.2f}"
+            )
+            for idx, item in enumerate(items[-self.ledger_show_count:]):
+                ts = time.strftime("%m-%d %H:%M", time.localtime(item["t"]))
+                total = float(item["total"])
+                line = f"{ts}   {total:.2f} 元"
+                pos = len(items) - self.ledger_show_count + idx
+                if pos > 0:
+                    prev = float(items[pos - 1]["total"])
+                    diff = total - prev
+                    if abs(diff) >= 0.005:
+                        arrow = "↓" if diff < 0 else "↑"
+                        line += f"  {arrow}{abs(diff):.2f}"
+                blocks.append(line)
+        return "\n".join(blocks)
 
     # ---------------- 通知 ----------------
 
@@ -481,10 +565,14 @@ class DeepSeekBalance(Star):
         yield event.plain_result("查询中，稍等…")
 
         blocks: list[str] = []
+        pairs: list[tuple[str, float]] = []
         for name, key in keys_to_query:
             try:
                 data = await self._query_balance(key)
                 blocks.append(self._format_one(name, key, data))
+                total = self._extract_total(data)
+                if total is not None:
+                    pairs.append((name, total))
             except ValueError as e:
                 blocks.append(f"【{name}】查询失败: {e}")
             except aiohttp.ClientError as e:
@@ -495,7 +583,38 @@ class DeepSeekBalance(Star):
                 logger.exception("[DS余额] 查询异常")
                 blocks.append(f"【{name}】查询异常: {e}")
 
+        await self._record_ledger(pairs)
+
+        if self.enable_query_report and pairs:
+            # 回报走后台，不挡查询结果的返回
+            asyncio.create_task(
+                self._report_query_safe(pairs, event.unified_msg_origin)
+            )
+
         yield event.plain_result("DeepSeek 余额\n\n" + "\n\n".join(blocks))
+
+    async def _report_query_safe(
+        self, pairs: list[tuple[str, float]], session_str: str
+    ) -> None:
+        try:
+            await self._report_query(pairs, session_str)
+        except Exception:  # noqa: BLE001
+            logger.exception("[DS余额] 查询回报失败")
+
+    async def _report_query(
+        self, pairs: list[tuple[str, float]], session_str: str
+    ) -> None:
+        """把「几点查了余额、剩多少」作为一条事件推给 agent。"""
+        if not pairs:
+            return
+        now = time.strftime("%H点%M分", time.localtime())
+        if len(pairs) == 1:
+            detail = f"{pairs[0][1]:.2f} 元"
+        else:
+            detail = "、".join(f"{total:.2f} 元（{name}）" for name, total in pairs)
+        text = f"{now}查询了 DeepSeek 余额，剩余 {detail}"
+        if not await self._notify_via_agent(text, session_str):
+            logger.warning("[DS余额] 查询回报未能送达 agent")
 
     @filter.command("余额订阅")
     async def subscribe(self, event: AstrMessageEvent):
@@ -549,6 +668,30 @@ class DeepSeekBalance(Star):
                 lines.append("已开启自动切换供应商，但没填 fallback_provider_id")
         yield event.plain_result("\n".join(lines))
 
+    @filter.command("余额账本", alias={"ds账本"})
+    async def ledger_cmd(self, event: AstrMessageEvent):
+        """查看余额变化账本"""
+        if not self._is_allowed(event):
+            yield event.plain_result("这个命令只有管理员能用哦")
+            return
+
+        if not self.enable_ledger:
+            yield event.plain_result(
+                "账本功能没开。到插件配置里把 enable_ledger 打开就会开始记录。"
+            )
+            return
+
+        raw = (event.message_str or "").strip()
+        arg = raw[len("余额账本"):].strip() if raw.startswith("余额账本") else ""
+
+        if arg in ("清空", "清除", "clear"):
+            await self.put_kv_data(KV_LEDGER, [])
+            yield event.plain_result("账本已清空")
+            return
+
+        ledger = await self._load_ledger()
+        yield event.plain_result(self._format_ledger(ledger))
+
     @filter.command("余额帮助", alias={"ds帮助"})
     async def balance_help(self, event: AstrMessageEvent):
         """查看余额插件用法"""
@@ -556,6 +699,8 @@ class DeepSeekBalance(Star):
             "DeepSeek 余额查询\n"
             "/余额        查询所有 Key 的余额\n"
             "/余额 备注名  只查某一个\n"
+            "/余额账本     查看余额变化记录\n"
+            "/余额账本 清空  清空账本\n"
             "/余额订阅     把当前会话设为低余额通知目标\n"
             "/余额订阅 关闭  取消订阅\n"
             "/余额检查     立即检查一次\n"

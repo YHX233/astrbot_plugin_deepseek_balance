@@ -32,7 +32,7 @@ DeepSeek 余额
 
 ### 方式二：WebUI 上传
 
-1. 下载 [astrbot_plugin_deepseek_balance_v1.1.0.zip](dist/astrbot_plugin_deepseek_balance_v1.1.0.zip)（也可在 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 页面获取）
+1. 下载 [astrbot_plugin_deepseek_balance_v1.1.0.zip](dist/astrbot_plugin_deepseek_balance_v1.2.0.zip)（也可在 [Releases](https://github.com/YHX233/astrbot_plugin_deepseek_balance/releases) 页面获取）
 2. 打开 AstrBot WebUI，进入插件管理
 3. 点「安装插件」，上传这个 zip
 4. 装完自动加载，插件列表里会出现「DeepSeek余额查询」
@@ -74,6 +74,10 @@ api_keys:
 | `notify_mode` | string | `agent` | 通知方式：`agent` 或 `message` |
 | `notify_session` | string | 空 | 通知目标会话，留空则用 `/余额订阅` 记录的 |
 | `notify_cooldown_hours` | int | `6` | 同一个 Key 的提醒冷却时间 |
+| `enable_ledger` | bool | `true` | 记录余额账本 |
+| `ledger_max_records` | int | `500` | 账本最多保留条数 |
+| `ledger_show_count` | int | `5` | 账本里每个 Key 显示几条明细 |
+| `enable_query_report` | bool | `false` | 查询后额外回报给 AI |
 | `enable_auto_switch_provider` | bool | `false` | 低余额时自动切换供应商 |
 | `fallback_provider_id` | string | 空 | 切换目标供应商 ID |
 
@@ -85,6 +89,8 @@ api_keys:
 | --- | --- |
 | `/余额` | 查询所有已配置 Key 的余额 |
 | `/余额 备注名` | 只查指定的那一个 |
+| `/余额账本` | 查看余额变化记录 |
+| `/余额账本 清空` | 清空账本 |
 | `/余额订阅` | 把当前会话设为低余额通知目标 |
 | `/余额订阅 关闭` | 取消订阅 |
 | `/余额检查` | 立即检查一次（忽略冷却） |
@@ -93,6 +99,24 @@ api_keys:
 命令别名：`/查余额`、`/ds余额`、`/deepseek余额`，效果一样。
 
 查询需要联网，会先回一句「查询中，稍等…」，然后出结果。
+
+## 余额账本
+
+默认开启。每次查余额都会记一条——手动 `/余额` 和定期检查都算——用 `/余额账本` 看变化。
+
+```
+DeepSeek 余额账本
+
+【主号】
+当前 3.20 元 ｜ 记录 5 次 ｜ 最高 12.00 ｜ 最低 3.20
+11-05 18:45   7.20 元  ↓2.30
+11-05 19:45   4.80 元  ↓2.40
+11-05 20:45   3.20 元  ↓1.60
+```
+
+箭头是和上一条记录相比的变化。每个 Key 只显示最近 `ledger_show_count` 条明细，总量上限 `ledger_max_records`，超了丢最早的。
+
+数据存在插件自己的 KV 存储里，不落地成文件。不想记就把 `enable_ledger` 关掉，已有的记录用 `/余额账本 清空` 抹掉。
 
 ## 余额监控
 
@@ -132,6 +156,14 @@ api_keys:
 > ⚠️ **此功能会破坏缓存导致消费增加。** 切换供应商会让 prompt 缓存失效，同样的对话要多花一遍钱。除非余额真的见底，否则不建议开。
 
 `fallback_provider_id` 填 AstrBot「服务提供商」页面里那个 ID，留空则不切换。切换会同时作用于当前会话和全局，避免只对单个会话生效。
+
+## 查询回报
+
+`enable_query_report` 打开后，每次 `/余额` 查询完会额外唤醒一次 AI，让它知道「xx点xx分查询了ds余额，剩余xxx」这件事，后续对话里就能提起来。
+
+默认关闭，原因很实在：每次查询都要多跑一轮模型，费 token，而且账本已经把同样的信息记下来了，`/余额账本` 随时能查。想要 AI 对余额有记忆再开。
+
+回报走后台任务，不会拖慢查询结果的返回速度。唤醒失败只记日志，不会重复发消息骚扰你。
 
 ## 常见问题
 
